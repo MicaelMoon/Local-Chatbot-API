@@ -1,0 +1,32 @@
+
+
+- Perhaps have the model gain access do data up to a certain date before it needs to access the database
+- Context window: Models have a token limit (~4K–8K+ tokens). Too long a chat history will need to be trimmed.
+    - Have the ai search for a specific time frame
+
+- Have your model train based on your conversations instead of looking in the database
+
+
+Final goal = Have a model Automatically learns more and more about you and your life as you talk to it. You should be able to aks the chatbot to
+    refer back to a certain point in time or talking  point and it should be able to bring it up in detail and when you mentioned it.
+
+Goal for:
+    - Version 1: CHECK
+        - A chatbot that connects to your database to fetch information on startup and save in chat history
+        - All chats will save to the database automatically
+
+    - Version 2:
+        - Simple chat history
+        - Use commands/code words to dictate when it will access local database
+
+    UPDATED
+        - Add configuration (Frontend, database for configs, etc)
+        - Example on configuration schema/object:
+            - model
+
+
+Notes:
+    Models can save a certain amount of tokens/words in it's history before it starts to forget.
+    - Mistral = So, 8,000 tokens ≈ ~6,000 words ≈ ~24,000 characters
+    - Think about potentiall storing logs
+        - Cons = It wont remember word for word but that would make it a more human like interaction.
