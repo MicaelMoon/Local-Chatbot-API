@@ -6,6 +6,8 @@ from fastapi import Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict
+from services.ai_service import AIService
+from services.database_service import DatabaseService
 
 class Message(BaseModel):
     date_time:str
@@ -13,6 +15,8 @@ class Message(BaseModel):
     reply:str
 
 # Properties
+db_service = DatabaseService()
+
 client = MongoClient("mongodb://localhost:27017/")
 db = client["ai_assistant_memory"]
 chats_collection = db["chats"]
@@ -23,24 +27,6 @@ chat_history = [{
         "Messages you recieve from the user will start with a datetime in ISO format (YYYY-MM-DD HH:MM:SS)"
         "This is metadata and not part of the user's actual message."
         "Use it to understand the context in time."}]
-
-# Functions
-def get_all_chats() -> list[dict]:
-    result = chats_collection.find({}, {"_id":0})
-
-    return list(result)
-
-def save_message_to_db(chat_message: str, chat_reply: str):
-    
-    doc = {
-        "date_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "message": chat_message,
-        "reply": chat_reply
-    }
-
-    chats_collection.insert_one(doc)
-
-    return doc
 
 # Endpoints
 app = FastAPI()
@@ -59,7 +45,8 @@ def root():
 
 @app.get("/messages")
 def get_messages():
-    return get_all_chats()
+    return db_service.get_all_chats()    
+
 
 @app.post("/message", response_model=Message)
 def create_message(chat_message:str = Query(...)) -> Message:
@@ -72,7 +59,7 @@ def create_message(chat_message:str = Query(...)) -> Message:
     chat_reply = response['message']['content']
     chat_history.append({"role":"assistant", "content": chat_reply})
 
-    save_message_to_db(chat_message, chat_reply)
+    db_service.save_message_to_db(chat_message, chat_reply)
 
     full_message = Message(
         date_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
