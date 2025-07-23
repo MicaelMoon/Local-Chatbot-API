@@ -6,41 +6,20 @@ from fastapi import Query
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Dict
+from services.ai_service import AIService
+from services.database_service import DatabaseService
 
+# Classes
 class Message(BaseModel):
     date_time:str
     message:str
     reply:str
 
 # Properties
-client = MongoClient("mongodb://localhost:27017/")
-db = client["ai_assistant_memory"]
-chats_collection = db["chats"]
-chat_history = [{
-    "role": "system",
-    "content":
-        "You're my personal ai assistant\n"
-        "Messages you recieve from the user will start with a datetime in ISO format (YYYY-MM-DD HH:MM:SS)"
-        "This is metadata and not part of the user's actual message."
-        "Use it to understand the context in time."}]
+db_service = DatabaseService()
+ai_service = AIService()
 
-# Functions
-def get_all_chats() -> list[dict]:
-    result = chats_collection.find({}, {"_id":0})
-
-    return list(result)
-
-def save_message_to_db(chat_message: str, chat_reply: str):
-    
-    doc = {
-        "date_time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        "message": chat_message,
-        "reply": chat_reply
-    }
-
-    chats_collection.insert_one(doc)
-
-    return doc
+chat_history = ai_service.final_response_model_setup # In the future the chat history should prob not save all the time from the database.
 
 # Endpoints
 app = FastAPI()
@@ -57,13 +36,21 @@ app.add_middleware(
 def root():
     return {"Hello": "World"}
 
-@app.get("/messages")
+@app.get("/messages") # Don't want it to do this one.
 def get_messages():
-    return get_all_chats()
+    return db_service.get_all_chats()    
+
 
 @app.post("/message", response_model=Message)
 def create_message(chat_message:str = Query(...)) -> Message:
-    chat_history.append({"role":"user", "content": f"{datetime.now()} {chat_message}"})
+    old_chat_messeges = ai_service.reason_if_need_data_from_db(chat_message)
+    
+    if(old_chat_messeges != None): # Adds the fetched messages to the chat history
+        for message in old_chat_messeges:
+            chat_history.append({"role":"user", "content": f"{datetime.now()} {message.get("message")}"})
+            chat_history.append({"role":"assistant", "content": f"{message.get("reply")}"})
+
+    chat_history.append({"role":"user", "content": f"{datetime.now()} {chat_message}"}) # Might not want to save a chathistory on the api in the future
 
     response = ollama.chat(
         model="mistral",
@@ -72,7 +59,7 @@ def create_message(chat_message:str = Query(...)) -> Message:
     chat_reply = response['message']['content']
     chat_history.append({"role":"assistant", "content": chat_reply})
 
-    save_message_to_db(chat_message, chat_reply)
+    db_service.save_message_to_db(chat_message, chat_reply)
 
     full_message = Message(
         date_time=datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
