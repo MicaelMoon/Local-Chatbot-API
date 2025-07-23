@@ -9,6 +9,7 @@ from typing import Dict
 from services.ai_service import AIService
 from services.database_service import DatabaseService
 
+# Classes
 class Message(BaseModel):
     date_time:str
     message:str
@@ -16,17 +17,9 @@ class Message(BaseModel):
 
 # Properties
 db_service = DatabaseService()
+ai_service = AIService()
 
-client = MongoClient("mongodb://localhost:27017/")
-db = client["ai_assistant_memory"]
-chats_collection = db["chats"]
-chat_history = [{
-    "role": "system",
-    "content":
-        "You're my personal ai assistant\n"
-        "Messages you recieve from the user will start with a datetime in ISO format (YYYY-MM-DD HH:MM:SS)"
-        "This is metadata and not part of the user's actual message."
-        "Use it to understand the context in time."}]
+chat_history = ai_service.final_response_model_setup # In the future the chat history should prob not save all the time from the database.
 
 # Endpoints
 app = FastAPI()
@@ -43,14 +36,21 @@ app.add_middleware(
 def root():
     return {"Hello": "World"}
 
-@app.get("/messages")
+@app.get("/messages") # Don't want it to do this one.
 def get_messages():
     return db_service.get_all_chats()    
 
 
 @app.post("/message", response_model=Message)
 def create_message(chat_message:str = Query(...)) -> Message:
-    chat_history.append({"role":"user", "content": f"{datetime.now()} {chat_message}"})
+    old_chat_messeges = ai_service.reason_if_need_data_from_db(chat_message)
+    
+    if(old_chat_messeges != None): # Adds the fetched messages to the chat history
+        for message in old_chat_messeges:
+            chat_history.append({"role":"user", "content": f"{datetime.now()} {message.get("message")}"})
+            chat_history.append({"role":"assistant", "content": f"{message.get("reply")}"})
+
+    chat_history.append({"role":"user", "content": f"{datetime.now()} {chat_message}"}) # Might not want to save a chathistory on the api in the future
 
     response = ollama.chat(
         model="mistral",
